@@ -3,7 +3,7 @@
 #
 # 도메인 없이 IP 주소로 HTTPS 를 쓴다.
 #   TLS_MODE=internal : Caddy 자체 인증서(브라우저 경고 1회 수락) — 내부망 시험용
-#   TLS_MODE=public   : Let's Encrypt IP 인증서(6일 수명, 자동 갱신) — 외부 위원 초대용.
+#   TLS_MODE=public   : Let's Encrypt IP 인증서(6일 수명, 자동 갱신) — 외부 참석자 초대용.
 #                       발급·갱신 검증이 인터넷 → PUBLIC_IP:443 으로 들어오므로 443/tcp 외부 개방이 전제다.
 # 포트(모두 PUBLIC_IP 에만 바인딩, 80/tcp 미사용):
 #   443/tcp  웹·API·LiveKit 시그널링(/rtc 경로)   7881/tcp ICE/TCP   7882/udp 미디어   3478/udp TURN/UDP
