@@ -1,0 +1,26 @@
+{
+  "name": "meetflow-backend",
+  "version": "0.2.0",
+  "private": true,
+  "description": "MeetFlow v0.2 — LiveKit SFU 화상회의 인증·회의 관리 서버",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/api.test.js"
+  },
+  "dependencies": {
+    "express": "4.22.3",
+    "express-rate-limit": "7.5.0",
+    "helmet": "8.1.0",
+    "ioredis": "5.6.1",
+    "livekit-client": "2.15.7",
+    "livekit-server-sdk": "2.13.3"
+  },
+  "devDependencies": {
+    "ioredis-mock": "^8.13.1",
+    "supertest": "^7.3.1"
+  }
+}

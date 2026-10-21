@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <title>MeetFlow 화상회의</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MeetFlow</div>
+    <div class="topbar-room" id="topbar-room" hidden>
+      <span id="meeting-title" class="meeting-title"></span>
+      <span id="meeting-code" class="meeting-code"></span>
+      <span id="lock-badge" class="badge badge-warn" hidden>잠김</span>
+      <span id="rec-badge" class="badge badge-rec" hidden>● 녹화 중</span>
+      <span id="role-badge" class="badge" hidden>호스트</span>
+    </div>
+    <div class="topbar-actions" id="topbar-actions" hidden>
+      <button type="button" class="btn btn-ghost" id="btn-copy-invite">초대 링크 복사</button>
+      <button type="button" class="btn btn-ghost host-only" id="btn-lock" hidden>회의 잠금</button>
+      <button type="button" class="btn btn-danger host-only" id="btn-end" hidden>모두에게 회의 종료</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- 1) 회의 만들기 (내부 담당자) -->
+  <main id="view-create" class="view center" hidden>
+    <section class="card">
+      <h1>새 회의 만들기</h1>
+      <p class="muted">호스트 코드는 회의를 개설하는 내부 담당자에게만 배포합니다. 외부 참석자는 초대 링크와 회의 비밀번호로 입장합니다.</p>
+      <form id="form-create" autocomplete="off">
+        <label>회의 제목<input id="c-title" maxlength="60" placeholder="예: 2026 정책자문위원회 2차 회의" required /></label>
+        <label>내 이름(표시명)<input id="c-name" maxlength="30" placeholder="예: 정책팀 홍길동" required /></label>
+        <label>호스트 코드<input id="c-hostcode" type="password" required /></label>
+        <label>회의 비밀번호 (6자 이상, 참석자에게 별도 전달)<input id="c-password" type="password" minlength="6" maxlength="64" required /></label>
+        <label class="check"><input type="checkbox" id="c-waiting" checked /> 대기실 사용 — 참석자는 호스트가 수락해야 입장합니다</label>
+        <button class="btn btn-primary btn-block" type="submit" id="btn-create">회의 만들기</button>
+      </form>
+    </section>
+    <section class="card" id="invite-card" hidden>
+      <h2>초대 정보</h2>
+      <p class="muted">아래 링크와 비밀번호를 서로 다른 경로(예: 메일과 문자)로 전달하는 것을 권장합니다. 비밀번호는 이 화면을 벗어나면 다시 볼 수 없습니다.</p>
+      <div class="invite-box">
+        <div><span class="muted">초대 링크</span><code id="invite-url"></code></div>
+        <div><span class="muted">회의 비밀번호</span><code id="invite-pw"></code></div>
+      </div>
+      <div class="row">
+        <button type="button" class="btn" id="btn-copy-invite-text">초대 문구 복사</button>
+        <button type="button" class="btn btn-primary" id="btn-go-join">호스트로 입장</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- 2) 입장 대기실 -->
+  <main id="view-join" class="view center" hidden>
+    <section class="card card-wide">
+      <h1 id="join-title">회의 입장</h1>
+      <p class="muted" id="join-sub"></p>
+      <div class="prejoin">
+        <div class="preview">
+          <video id="preview-video" autoplay playsinline muted></video>
+          <div id="preview-off" class="preview-off">카메라 꺼짐</div>
+        </div>
+        <form id="form-join" autocomplete="off">
+          <label>표시할 이름<input id="j-name" maxlength="30" placeholder="예: 홍길동 (OO대학교)" required /></label>
+          <label id="j-password-wrap">회의 비밀번호<input id="j-password" type="password" maxlength="64" /></label>
+          <div class="row">
+            <button type="button" class="toggle" id="btn-pre-mic" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">마이크</span><span class="st">ON</span></button>
+            <button type="button" class="toggle" id="btn-pre-cam" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">카메라</span><span class="st">ON</span></button>
+          </div>
+          <label>마이크<select id="sel-mic"></select></label>
+          <label>카메라<select id="sel-cam"></select></label>
+          <label class="spk-wrap">스피커(소리 출력)<select id="sel-spk"></select></label>
+          <div class="row spk-wrap"><button type="button" class="btn" id="btn-pre-spk-test">스피커 시험음 듣기</button></div>
+          <p class="muted small spk-wrap">시험음이 안 들리면 스피커를 바꿔 보세요. 모니터 내장 오디오가 기본값으로 잡혀 있는 경우가 많습니다.</p>
+          <button class="btn btn-primary btn-block" type="submit" id="btn-join">입장하기</button>
+          <div id="waiting-box" class="waiting-box" hidden>
+            <div class="spinner" aria-hidden="true"></div>
+            <p><strong>호스트의 입장 승인을 기다리고 있습니다.</strong><br /><span class="muted small" id="waiting-text">호스트가 수락하면 자동으로 입장합니다. 이 화면을 닫지 마세요.</span></p>
+            <button type="button" class="btn" id="btn-wait-cancel">대기 취소</button>
+          </div>
+          <p class="muted small">입장하면 카메라·마이크 영상과 음성이 회의 참석자에게 전송됩니다. 서버에는 회의 내용을 저장하지 않습니다. 호스트는 회의를 녹화해 자기 PC에 저장할 수 있으며, 녹화 중에는 화면 위쪽에 「● 녹화 중」이 표시됩니다.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- 3) 회의 -->
+  <main id="view-meeting" class="view meeting" hidden>
+    <div class="stage-wrap">
+      <div id="stage" class="stage" hidden></div>
+      <div id="grid" class="grid"></div>
+    </div>
+    <aside id="side" class="side" hidden>
+      <div class="side-tabs">
+        <button type="button" class="tab" data-panel="chat" id="tab-chat">채팅</button>
+        <button type="button" class="tab" data-panel="people" id="tab-people">참석자 <span id="people-count"></span></button>
+        <button type="button" class="tab" data-panel="settings" id="tab-settings">설정</button>
+        <button type="button" class="tab tab-close" id="btn-side-close" aria-label="닫기">×</button>
+      </div>
+      <section id="panel-chat" class="panel">
+        <div id="chat-list" class="chat-list" aria-live="polite"></div>
+        <form id="form-chat" class="chat-form" autocomplete="off">
+          <input id="chat-input" maxlength="1000" placeholder="메시지 입력 (전체 공개)" />
+          <button class="btn btn-primary" type="submit">전송</button>
+        </form>
+      </section>
+      <section id="panel-people" class="panel" hidden>
+        <div id="waiting-section" class="waiting-section" hidden>
+          <div class="row waiting-head"><strong>입장 대기 <span id="waiting-count"></span></strong><button type="button" class="btn btn-small btn-primary" id="btn-approve-all">모두 수락</button></div>
+          <div id="waiting-list" class="people-list"></div>
+          <hr />
+        </div>
+        <div id="people-list" class="people-list"></div>
+      </section>
+      <section id="panel-settings" class="panel" hidden>
+        <div class="row"><button type="button" class="toggle" id="set-mic" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">마이크</span><span class="st">ON</span></button><button type="button" class="toggle" id="set-cam" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">카메라</span><span class="st">ON</span></button></div>
+        <label>마이크<select id="sel-mic-in"></select></label>
+        <label>카메라<select id="sel-cam-in"></select></label>
+        <label class="spk-wrap">스피커<select id="sel-spk-in"></select></label>
+        <button type="button" class="btn spk-wrap" id="btn-spk-test">스피커 시험음 듣기</button>
+        <div class="host-only" hidden>
+          <hr />
+          <div class="row"><button type="button" class="toggle" id="set-waiting" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">대기실(입장 승인)</span><span class="st">ON</span></button></div>
+          <hr />
+          <label>회의 비밀번호 변경<input id="new-password" type="password" minlength="6" maxlength="64" /></label>
+          <button type="button" class="btn" id="btn-change-pw">비밀번호 변경</button>
+        </div>
+      </section>
+    </aside>
+    <nav class="dock">
+      <button type="button" class="toggle dock-btn" id="btn-mic" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">마이크</span><span class="st">ON</span></button>
+      <button type="button" class="toggle dock-btn" id="btn-cam" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">카메라</span><span class="st">ON</span></button>
+      <button type="button" class="btn dock-btn" id="btn-screen">화면 공유</button>
+      <button type="button" class="btn dock-btn" id="btn-hand">손들기</button>
+      <button type="button" class="btn dock-btn" id="btn-chat">채팅 <span id="chat-badge" class="dot" hidden></span></button>
+      <button type="button" class="btn dock-btn" id="btn-people">참석자 <span id="people-badge" class="dot" hidden></span></button>
+      <button type="button" class="btn dock-btn" id="btn-settings">설정</button>
+      <button type="button" class="btn dock-btn host-only" id="btn-rec" hidden>녹화</button>
+      <button type="button" class="btn dock-btn btn-danger" id="btn-leave">나가기</button>
+    </nav>
+    <button type="button" id="btn-audio-unlock" class="btn btn-primary audio-unlock" hidden>소리 켜기 (브라우저 자동재생 차단 해제)</button>
+    <div id="audio-sink" hidden></div>
+  </main>
+
+  <!-- 4) 종료 -->
+  <main id="view-ended" class="view center" hidden>
+    <section class="card">
+      <h1 id="ended-title">회의에서 나왔습니다</h1>
+      <p class="muted" id="ended-sub"></p>
+      <button type="button" class="btn btn-primary" id="btn-rejoin">다시 입장</button>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="/vendor/livekit-client.umd.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

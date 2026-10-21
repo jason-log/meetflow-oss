@@ -1,0 +1,97 @@
+# MeetFlow 운영 서버용 Compose — 공인 IP 하나, 도메인 없는 서버(다른 서비스와 포트 분리)
+# 사용: docker compose -f docker-compose.server.yml up -d --build   (.env 는 scripts/init-server-env.sh 로 생성)
+#
+# 도메인 없이 IP 주소로 HTTPS 를 쓴다.
+#   TLS_MODE=internal : Caddy 자체 인증서(브라우저 경고 1회 수락) — 내부망 시험용
+#   TLS_MODE=public   : Let's Encrypt IP 인증서(6일 수명, 자동 갱신) — 외부 위원 초대용.
+#                       발급·갱신 검증이 인터넷 → PUBLIC_IP:443 으로 들어오므로 443/tcp 외부 개방이 전제다.
+# 포트(모두 PUBLIC_IP 에만 바인딩, 80/tcp 미사용):
+#   443/tcp  웹·API·LiveKit 시그널링(/rtc 경로)   7881/tcp ICE/TCP   7882/udp 미디어   3478/udp TURN/UDP
+name: meetflow
+
+services:
+  redis:
+    # Valkey(BSD-3, Redis 호환) — Redis 7.4+ 는 RSAL/SSPL(비 OSI) 라이선스라 교체(2026-10-20)
+    image: valkey/valkey:8.1.10-alpine
+    restart: always
+    command: ["valkey-server", "--appendonly", "yes"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [meetflow-net]
+
+  livekit:
+    image: livekit/livekit-server:v1.13.8
+    restart: always
+    command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?.env 없음 - scripts/init-server-env.sh 실행}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET 미설정}"
+      NODE_IP: "${PUBLIC_IP:?PUBLIC_IP 미설정}"
+      # TURN/UDP 만 켠다(TLS 는 도메인이 있어야 가능 — IP 만으로는 443 공유 불가)
+      LIVEKIT_TURN_ENABLED: "true"
+      LIVEKIT_TURN_UDP_PORT: "3478"
+    ports:
+      - "${PUBLIC_IP}:7881:7881/tcp"
+      - "${PUBLIC_IP}:7882:7882/udp"
+      - "${PUBLIC_IP}:3478:3478/udp"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [meetflow-net]
+
+  backend:
+    build:
+      context: ./backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
+      LIVEKIT_PUBLIC_URL: "wss://${PUBLIC_IP}"
+      LIVEKIT_INTERNAL_URL: "http://livekit:7880"
+      REDIS_URL: "redis://redis:6379"
+      HOST_ACCESS_CODE: "${HOST_ACCESS_CODE:?HOST_ACCESS_CODE 미설정}"
+      MAX_PARTICIPANTS: "${MAX_PARTICIPANTS:-20}"
+      ROOM_TTL_HOURS: "${ROOM_TTL_HOURS:-24}"
+      TRUST_PROXY: "1"
+      TZ: Asia/Seoul
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    networks: [meetflow-net]
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: always
+    environment:
+      PUBLIC_HOST: "${PUBLIC_IP}"
+      TLS_MODE: "${TLS_MODE:-internal}"
+    ports:
+      - "${PUBLIC_IP}:443:443/tcp"
+    volumes:
+      - ./Caddyfile.server:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [backend, livekit]
+    networks: [meetflow-net]
+
+volumes:
+  valkey-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  meetflow-net:
+    driver: bridge

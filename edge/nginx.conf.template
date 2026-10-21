@@ -1,0 +1,21 @@
+# MeetFlow edge — 443/tcp TLS SNI 분기 (TLS 는 종료하지 않고 그대로 넘긴다)
+worker_processes auto;
+events { worker_connections 4096; }
+
+stream {
+    map $ssl_preread_server_name $mf_upstream {
+        ${TURN_DOMAIN}  livekit:443;
+        default         caddy:443;
+    }
+
+    resolver 127.0.0.11 valid=30s ipv6=off;   # docker 내장 DNS (컨테이너 재시작 후 IP 변경 대응)
+
+    server {
+        listen 443;
+        ssl_preread on;
+        proxy_pass $mf_upstream;
+        proxy_protocol on;             # 실제 접속자 IP 전달 (caddy·livekit TURN 모두 수신 설정됨)
+        proxy_connect_timeout 5s;
+        proxy_timeout 2h;              # 회의 중 장시간 TURN 연결 유지
+    }
+}

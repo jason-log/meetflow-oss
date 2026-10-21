@@ -1,0 +1,90 @@
+name: meetflow
+
+services:
+  redis:
+    # Valkey(BSD-3, Redis 호환) — Redis 7.4+ 는 RSAL/SSPL(비 OSI) 라이선스라 교체(2026-10-20)
+    image: valkey/valkey:8.1.10-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [meetflow-net]
+
+  livekit:
+    image: livekit/livekit-server:v1.13.8
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY 미설정 - start 스크립트로 .env 생성}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET 미설정}"
+      NODE_IP: "${LIVEKIT_NODE_IP:-127.0.0.1}"
+    ports:
+      - "${LOCAL_BIND:-127.0.0.1}:7880:7880"   # 시그널링: 로컬은 직접, 운영은 Caddy 경유(외부 비공개)
+      - "7881:7881/tcp"                         # ICE/TCP 폴백 (외부 공개)
+      - "7882:7882/udp"                         # WebRTC 미디어 (외부 공개)
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [meetflow-net]
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      # 셸에 NODE_ENV 가 설정된 PC(개발 도구가 production 으로 넣어 두는 경우)에서도 .env 값이 쓰이도록 별도 이름을 쓴다
+      NODE_ENV: "${MEETFLOW_ENV:-development}"
+      PORT: "3000"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
+      LIVEKIT_PUBLIC_URL: "${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}"
+      LIVEKIT_INTERNAL_URL: "http://livekit:7880"
+      REDIS_URL: "redis://redis:6379"
+      HOST_ACCESS_CODE: "${HOST_ACCESS_CODE:?HOST_ACCESS_CODE 미설정}"
+      MAX_PARTICIPANTS: "${MAX_PARTICIPANTS:-20}"
+      ROOM_TTL_HOURS: "${ROOM_TTL_HOURS:-24}"
+      TRUST_PROXY: "${TRUST_PROXY:-0}"
+    ports:
+      - "${LOCAL_BIND:-127.0.0.1}:${PORT:-3000}:3000"   # 운영에서도 127.0.0.1 — 외부는 Caddy(443)로만
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    networks: [meetflow-net]
+
+  caddy:
+    image: caddy:2.10-alpine
+    profiles: ["prod"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: "${APP_DOMAIN:?APP_DOMAIN 미설정}"
+      LIVEKIT_DOMAIN: "${LIVEKIT_DOMAIN:?LIVEKIT_DOMAIN 미설정}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [backend, livekit]
+    networks: [meetflow-net]
+
+volumes:
+  valkey-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  meetflow-net:
+    driver: bridge

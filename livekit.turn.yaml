@@ -1,0 +1,27 @@
+# LiveKit SFU 설정 (MeetFlow v0.2) — TURN 확장용(docker-compose.turn.yml 이 이 파일을 마운트)
+# 기본 livekit.yaml 과 같고 turn 블록만 더했다. 도메인·포트·인증서 경로는 compose 환경변수(LIVEKIT_TURN_*)가 채운다.
+# - API 키/시크릿은 이 파일에 쓰지 않는다: docker-compose 가 .env 값을 LIVEKIT_KEYS 환경변수로 넘긴다.
+# - 광고 IP는 NODE_IP 환경변수(.env 의 LIVEKIT_NODE_IP)로 지정한다.
+#   로컬: 127.0.0.1 / 운영 서버: 서버 공인 IP. 공인 IP를 명시하므로 STUN 자동 감지(use_external_ip)는 끈다.
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881        # UDP 차단망용 ICE/TCP 폴백
+  udp_port: 7882        # 단일 UDP 포트(mux) — 방화벽은 7882/udp 하나만 열면 된다
+  use_external_ip: false
+redis:
+  address: redis:6379
+room:
+  auto_create: false    # 백엔드가 비밀번호 검증 후 생성한 방만 존재
+  empty_timeout: 600
+  departure_timeout: 30
+  max_participants: 20
+logging:
+  level: info
+turn:
+  # edge(nginx)가 붙이는 PROXY protocol 헤더를 믿을 발신 대역 — docker 내부망만
+  proxy_protocol_trusted_cidrs:
+    - 172.16.0.0/12
+    - 10.0.0.0/8
+    - 192.168.0.0/16
