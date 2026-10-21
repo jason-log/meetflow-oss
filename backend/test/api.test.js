@@ -64,7 +64,7 @@ test('짧은 비밀번호 거부', async () => {
 });
 
 test('회의 생성', async () => {
-  const r = await request(app).post('/api/rooms').send({ title: '자문위원회 <b>2차</b>', hostCode: 'host-code-1234', password: 'pw-778899', waiting: false });
+  const r = await request(app).post('/api/rooms').send({ title: '주간 회의 <b>2차</b>', hostCode: 'host-code-1234', password: 'pw-778899', waiting: false });
   assert.equal(r.status, 201);
   assert.match(r.body.roomId, /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/);
   assert.ok(r.body.hostKey.length >= 40);
@@ -83,12 +83,12 @@ test('없는 회의 404', async () => {
 });
 
 test('틀린 비밀번호 401', async () => {
-  const r = await request(app).post(`/api/rooms/${roomId}/join`).send({ name: '외부위원', password: 'nope' });
+  const r = await request(app).post(`/api/rooms/${roomId}/join`).send({ name: '참석자', password: 'nope' });
   assert.equal(r.status, 401);
 });
 
 test('맞는 비밀번호 → guest 토큰(관리 권한 없음)', async () => {
-  const r = await request(app).post(`/api/rooms/${roomId}/join`).send({ name: '외부위원 A', password: 'pw-778899' });
+  const r = await request(app).post(`/api/rooms/${roomId}/join`).send({ name: '참석자 A', password: 'pw-778899' });
   assert.equal(r.status, 200);
   assert.equal(r.body.role, 'guest');
   const c = decodeJwt(r.body.token);
@@ -161,7 +161,7 @@ test('대기실: 비밀번호 맞아도 202 대기 → 호스트 승인 후 토�
   assert.equal((await request(app).get(`/api/rooms/${id}`)).body.waiting, true);
   // 틀린 비번은 대기열에도 못 들어감
   assert.equal((await request(app).post(`/api/rooms/${id}/join`).send({ name: 'x', password: 'nope' })).status, 401);
-  const j = await request(app).post(`/api/rooms/${id}/join`).send({ name: '위원 <i>K</i>', password: 'wait-pass-1' });
+  const j = await request(app).post(`/api/rooms/${id}/join`).send({ name: '참석자 <i>K</i>', password: 'wait-pass-1' });
   assert.equal(j.status, 202);
   assert.equal(j.body.status, 'waiting');
   assert.ok(!j.body.token);
@@ -216,9 +216,9 @@ test('대기실: 승인 뒤 호스트가 잠그면 토큰 미발급(423)', async
 
 test('이름: 양방향 조작·폭 없는 문자 제거', async () => {
   const cr = await request(app).post('/api/rooms').send({ title: 'nm', hostCode: 'host-code-1234', password: 'name-pass-1', waiting: false });
-  const r = await request(app).post(`/api/rooms/${cr.body.roomId}/join`).send({ name: '‮위원​A⁦', password: 'name-pass-1' });
+  const r = await request(app).post(`/api/rooms/${cr.body.roomId}/join`).send({ name: '‮참석자​A⁦', password: 'name-pass-1' });
   assert.equal(r.status, 200);
-  assert.equal(decodeJwt(r.body.token).name, '위원A');
+  assert.equal(decodeJwt(r.body.token).name, '참석자A');
 });
 
 test('속도 제한 키: IPv6 는 /64 로 묶음', () => {

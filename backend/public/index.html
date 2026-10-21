@@ -32,8 +32,8 @@
       <h1>새 회의 만들기</h1>
       <p class="muted">호스트 코드는 회의를 개설하는 내부 담당자에게만 배포합니다. 외부 참석자는 초대 링크와 회의 비밀번호로 입장합니다.</p>
       <form id="form-create" autocomplete="off">
-        <label>회의 제목<input id="c-title" maxlength="60" placeholder="예: 2026 정책자문위원회 2차 회의" required /></label>
-        <label>내 이름(표시명)<input id="c-name" maxlength="30" placeholder="예: 정책팀 홍길동" required /></label>
+        <label>회의 제목<input id="c-title" maxlength="60" placeholder="예: 주간 회의" required /></label>
+        <label>내 이름(표시명)<input id="c-name" maxlength="30" placeholder="예: 홍길동" required /></label>
         <label>호스트 코드<input id="c-hostcode" type="password" required /></label>
         <label>회의 비밀번호 (6자 이상, 참석자에게 별도 전달)<input id="c-password" type="password" minlength="6" maxlength="64" required /></label>
         <label class="check"><input type="checkbox" id="c-waiting" checked /> 대기실 사용 — 참석자는 호스트가 수락해야 입장합니다</label>
@@ -65,7 +65,7 @@
           <div id="preview-off" class="preview-off">카메라 꺼짐</div>
         </div>
         <form id="form-join" autocomplete="off">
-          <label>표시할 이름<input id="j-name" maxlength="30" placeholder="예: 홍길동 (OO대학교)" required /></label>
+          <label>표시할 이름<input id="j-name" maxlength="30" placeholder="예: 홍길동 (소속)" required /></label>
           <label id="j-password-wrap">회의 비밀번호<input id="j-password" type="password" maxlength="64" /></label>
           <div class="row">
             <button type="button" class="toggle" id="btn-pre-mic" aria-pressed="true"><span class="sw" aria-hidden="true"></span><span class="lbl">마이크</span><span class="st">ON</span></button>
