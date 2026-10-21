@@ -2,7 +2,7 @@
   "name": "meetflow-backend",
   "version": "0.2.0",
   "private": true,
-  "description": "MeetFlow v0.2 — LiveKit SFU 화상회의 인증·회의 관리 서버",
+  "description": "MeetFlow v0.2 — auth and meeting management server for LiveKit SFU video meetings",
   "main": "server.js",
   "engines": {
     "node": ">=22"

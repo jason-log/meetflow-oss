@@ -1,26 +1,26 @@
-# 보안 정책
+# Security policy
 
-## 지원 버전
+## Supported versions
 
-| 버전 | 보안 수정 |
+| Version | Security fixes |
 |---|---|
-| `main` 최신 | 예 |
-| 그 밖 | 아니오 |
+| latest `main` | yes |
+| anything else | no |
 
-## 취약점 알리기
+## Reporting a vulnerability
 
-공개 Issue·PR·토론에 쓰지 마십시오. 저장소의 **Security → Report a vulnerability**(GitHub 비공개 취약점 보고)로 알려 주십시오.
+Please do not post vulnerabilities in public issues, pull requests or discussions. Use **Security → Report a vulnerability** on this repository (GitHub private vulnerability reporting).
 
-함께 적어 주시면 빨리 확인할 수 있습니다.
+It helps if you include:
 
-- 영향 받는 파일·경로와 버전(커밋)
-- 문제가 생기는 절차(최소 예시)
-- 예상되는 영향(권한 상승, 정보 노출, 서비스 거부 등)
+- the affected files or paths and the version (commit)
+- steps to reproduce (a minimal example)
+- the expected impact (privilege escalation, information disclosure, denial of service, etc.)
 
-개인이 운영하는 PoC라 응답 기한은 약속하지 못합니다. 확인되면 수정 커밋에 보고자를 밝힙니다(원하지 않으면 생략합니다).
+This is a PoC maintained by one person, so no response deadline can be promised. Confirmed reports are credited in the fixing commit (let us know if you prefer not to be named).
 
-## 범위 밖
+## Out of scope
 
-- [README 「한계」](README.md#한계)에 적힌 동작(내보낸 참석자의 갱신 토큰 재접속, 호스트 제어의 비강제성 등)
-- 운영자가 `.env`를 잘못 설정해 생긴 문제(예: 운영에서 `MEETFLOW_ENV=development`)
-- LiveKit·Caddy·Valkey 등 사용 구성요소 자체의 취약점 — 각 프로젝트에 알려 주십시오
+- Behavior described in [README → Limitations](README.md#limitations) (removed participants rejoining with a refresh token, host controls not being enforced, etc.)
+- Problems caused by a misconfigured `.env` (for example `MEETFLOW_ENV=development` in production)
+- Vulnerabilities in the components themselves (LiveKit, Caddy, Valkey, etc.) — please report those to the respective projects

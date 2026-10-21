@@ -1,8 +1,8 @@
-# MeetFlow 운영 서버(IP 주소 HTTPS) — 웹·API와 LiveKit 시그널링을 443 하나에서 경로로 나눈다.
+# MeetFlow server with an IP address only (HTTPS on the IP) — the web app/API and LiveKit signaling share 443, split by path.
 {
-	# 호스트 80 은 다른 웹 서비스가 쓸 수 있으므로 비워 둔다. HTTP→HTTPS 리다이렉트·http-01 검증을 쓰지 않는다.
+	# Host port 80 may be used by another web service, so leave it alone: no HTTP→HTTPS redirect and no http-01 challenge.
 	auto_https disable_redirects
-	# IP 주소 접속은 브라우저가 SNI 를 보내지 않고, 컨테이너 안에서는 목적지 IP 도 공인 IP 가 아니다 → 기본 인증서를 지정
+	# Browsers send no SNI when connecting to an IP, and inside the container the destination IP is not the public IP → set the default certificate
 	default_sni {$PUBLIC_HOST}
 }
 
@@ -23,7 +23,7 @@ https://{$PUBLIC_HOST} {
 	import tls-{$TLS_MODE}
 	encode zstd gzip
 
-	# livekit-client 는 <url>/rtc (WebSocket) 와 <url>/rtc/validate 만 쓴다
+	# livekit-client only uses <url>/rtc (WebSocket) and <url>/rtc/validate
 	@livekit path /rtc /rtc/*
 	handle @livekit {
 		reverse_proxy livekit:7880

@@ -2,7 +2,7 @@ name: meetflow
 
 services:
   redis:
-    # Valkey(BSD-3, Redis 호환) — Redis 7.4+ 는 RSAL/SSPL(비 OSI) 라이선스라 교체(2026-10-20)
+    # Valkey (BSD-3, Redis-compatible) — used instead of Redis 7.4+, which is RSAL/SSPL (not OSI-approved)
     image: valkey/valkey:8.1.10-alpine
     restart: unless-stopped
     command: ["valkey-server", "--appendonly", "yes"]
@@ -20,12 +20,12 @@ services:
     restart: unless-stopped
     command: ["--config", "/etc/livekit.yaml"]
     environment:
-      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY 미설정 - start 스크립트로 .env 생성}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET 미설정}"
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY not set - run the start script to create .env}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET not set}"
       NODE_IP: "${LIVEKIT_NODE_IP:-127.0.0.1}"
     ports:
-      - "${LOCAL_BIND:-127.0.0.1}:7880:7880"   # 시그널링: 로컬은 직접, 운영은 Caddy 경유(외부 비공개)
-      - "7881:7881/tcp"                         # ICE/TCP 폴백 (외부 공개)
-      - "7882:7882/udp"                         # WebRTC 미디어 (외부 공개)
+      - "${LOCAL_BIND:-127.0.0.1}:7880:7880"   # signaling: direct when local, via Caddy in production (not public)
+      - "7881:7881/tcp"                         # ICE/TCP fallback (public)
+      - "7882:7882/udp"                         # WebRTC media (public)
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     depends_on:
@@ -38,7 +38,7 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
-      # 셸에 NODE_ENV 가 설정된 PC(개발 도구가 production 으로 넣어 두는 경우)에서도 .env 값이 쓰이도록 별도 이름을 쓴다
+      # a separate name so the .env value wins even when the shell already has NODE_ENV set (some dev tools set it to production)
       NODE_ENV: "${MEETFLOW_ENV:-development}"
       PORT: "3000"
       LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
@@ -46,12 +46,12 @@ services:
       LIVEKIT_PUBLIC_URL: "${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}"
       LIVEKIT_INTERNAL_URL: "http://livekit:7880"
       REDIS_URL: "redis://redis:6379"
-      HOST_ACCESS_CODE: "${HOST_ACCESS_CODE:?HOST_ACCESS_CODE 미설정}"
+      HOST_ACCESS_CODE: "${HOST_ACCESS_CODE:?HOST_ACCESS_CODE not set}"
       MAX_PARTICIPANTS: "${MAX_PARTICIPANTS:-20}"
       ROOM_TTL_HOURS: "${ROOM_TTL_HOURS:-24}"
       TRUST_PROXY: "${TRUST_PROXY:-0}"
     ports:
-      - "${LOCAL_BIND:-127.0.0.1}:${PORT:-3000}:3000"   # 운영에서도 127.0.0.1 — 외부는 Caddy(443)로만
+      - "${LOCAL_BIND:-127.0.0.1}:${PORT:-3000}:3000"   # 127.0.0.1 in production too — outside traffic only via Caddy (443)
     read_only: true
     tmpfs: ["/tmp"]
     security_opt: ["no-new-privileges:true"]
@@ -71,8 +71,8 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      APP_DOMAIN: "${APP_DOMAIN:?APP_DOMAIN 미설정}"
-      LIVEKIT_DOMAIN: "${LIVEKIT_DOMAIN:?LIVEKIT_DOMAIN 미설정}"
+      APP_DOMAIN: "${APP_DOMAIN:?APP_DOMAIN not set}"
+      LIVEKIT_DOMAIN: "${LIVEKIT_DOMAIN:?LIVEKIT_DOMAIN not set}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

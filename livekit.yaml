@@ -1,18 +1,18 @@
-# LiveKit SFU 설정 (MeetFlow v0.2)
-# - API 키/시크릿은 이 파일에 쓰지 않는다: docker-compose 가 .env 값을 LIVEKIT_KEYS 환경변수로 넘긴다.
-# - 광고 IP는 NODE_IP 환경변수(.env 의 LIVEKIT_NODE_IP)로 지정한다.
-#   로컬: 127.0.0.1 / 운영 서버: 서버 공인 IP. 공인 IP를 명시하므로 STUN 자동 감지(use_external_ip)는 끈다.
+# LiveKit SFU configuration (MeetFlow v0.2)
+# - The API key/secret is not written here: docker-compose passes the .env values in the LIVEKIT_KEYS environment variable.
+# - The advertised IP comes from the NODE_IP environment variable (LIVEKIT_NODE_IP in .env).
+#   local: 127.0.0.1 / server: its public IP. Because the public IP is set explicitly, STUN auto-detection (use_external_ip) is off.
 port: 7880
 bind_addresses:
   - ""
 rtc:
-  tcp_port: 7881        # UDP 차단망용 ICE/TCP 폴백
-  udp_port: 7882        # 단일 UDP 포트(mux) — 방화벽은 7882/udp 하나만 열면 된다
+  tcp_port: 7881        # ICE/TCP fallback for networks that block UDP
+  udp_port: 7882        # single UDP port (mux) — open only 7882/udp in the firewall
   use_external_ip: false
 redis:
   address: redis:6379
 room:
-  auto_create: false    # 백엔드가 비밀번호 검증 후 생성한 방만 존재
+  auto_create: false    # only rooms created by the backend after password checks exist
   empty_timeout: 600
   departure_timeout: 30
   max_participants: 20

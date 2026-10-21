@@ -5,174 +5,193 @@
 ![LiveKit 1.13](https://img.shields.io/badge/LiveKit-1.13-1f2937)
 ![Status: PoC](https://img.shields.io/badge/status-PoC-orange)
 
-LiveKit SFU 기반 소규모(20인 이하) 자체 호스팅 화상회의 — 초대 링크 + 회의 비밀번호, 대기실, 호스트 제어
+**Self-hosted video meetings for small groups (up to 20 people).** Guests join with an invite link and a meeting password — no accounts, no app install. Try it on a laptop with one command, then deploy it to your own server with Docker Compose.
 
-![호스트 화면 — 화면 공유가 크게 표시되고 오른쪽에 참석자·채팅](docs/screenshot-share.jpg)
+![Host view — a shared screen shown large, with participants and chat on the right](docs/screenshot-share.jpg)
 
-외부 참석자를 계정 없이 **초대 링크 + 회의 비밀번호**로 부르는 화상회의입니다. 회의는 내부 담당자만 만들 수 있고, 영상·음성·채팅은 자체 서버를 벗어나지 않습니다. 서버에 회의 내용을 저장하지 않습니다.
-Docker Compose 하나로 노트북에서 시험하고, 공인 IP 하나뿐인 서버(도메인 없음)에도 HTTPS로 올릴 수 있습니다.
+> **Status: proof of concept.** Tested in real meetings with 10+ people joining at once, but not hardened for large-scale or long-term production use. Please read [Limitations](#limitations) first.
+>
+> **UI language:** the web interface is currently in **Korean only**. The docs and configuration are in English.
 
-기능 소개 글: [MeetFlow: 링크와 비밀번호로 들어오는 자체 호스팅 화상회의](https://jason-log.notion.site/MeetFlow-400b37d1f4498168b1cfca0913f40dae)
+## Why MeetFlow
 
-> **상태: PoC.** 실제 회의(10인 이상 동시 접속)로 검증했지만, 대규모·장기 운영용으로 다듬은 제품은 아닙니다. [한계](#한계)를 먼저 읽어 주십시오.
+- **Guests need nothing but a browser.** Send a link and a password; external participants join from Chrome or Edge, on desktop or phone (phones need a real HTTPS certificate — see [Limitations](#limitations)).
+- **Your media stays on your server.** Video, audio and chat go through your own LiveKit SFU. The server does not record or store meeting content.
+- **Only your team can open meetings.** Creating a meeting requires a host code; guests wait in a lobby (on by default) until the host lets them in.
+- **Small and readable.** One Node backend, three static frontend files with no build step, no external CDN.
+- **Works without a domain.** Deploy to a server that has only a public IP and still get HTTPS (Let's Encrypt IP certificate).
 
-## 목차
+**Good fit:** recurring meetings with outside guests, teams that want meeting media to stay on their own server, a self-hosted lab or test setup.
+**Not a good fit:** large webinars, meetings above ~20 people, server-side recording, or anyone who needs a polished, supported product.
 
-- [기능](#기능)
-- [빠른 시작](#빠른-시작)
-- [구성](#구성)
-- [환경 변수](#환경-변수)
-- [배포](#배포)
-- [보안 설계](#보안-설계)
-- [한계](#한계)
-- [개발·시험](#개발시험)
-- [기여](#기여)
-- [라이선스](#라이선스)
+## Contents
 
-## 기능
+- [Features](#features)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Security design](#security-design)
+- [Limitations](#limitations)
+- [Development and tests](#development-and-tests)
+- [Contributing](#contributing)
+- [Credits](#credits)
+- [License](#license)
 
-| 대상 | 기능 |
+## Features
+
+| For | What you get |
 |---|---|
-| 참석자 | 링크 + 비밀번호로 입장(가입 없음), 입장 전 장치 점검(카메라·마이크·스피커 시험음), 마이크·카메라 ON/OFF, 화면 공유(음성 포함), 채팅, 손들기, 크게 보기 |
-| 호스트 | 회의 생성(호스트 코드 필요), 대기실 입장 승인·거절, 회의 잠금, 비밀번호 변경, 참석자 음소거·화면 공유 중지·내보내기, 모두에게 회의 종료 |
-| 녹화 | 호스트 PC에만 저장(탭 화면 + 전원 음성, webm). 녹화 중에는 전원 화면에 「● 녹화 중」 표시 |
-| 화면 | 창 크기에 맞춰 타일 자동 배치(스크롤 없음), 누가 화면을 공유하면 그 화면을 크게 표시, 휴대폰 화면 지원 |
-| 개인정보 | 서버 녹화·채팅 저장 없음, 회의 정보는 만료 시간(기본 24시간) 뒤 자동 삭제 |
+| Participants | Join with link + password (no sign-up), device check before joining (camera, microphone, speaker test tone), mic/camera on/off, screen sharing (with audio), chat, raise hand, spotlight a tile |
+| Host | Create meetings (host code required), admit or reject from the lobby, lock the meeting, change the password, mute a participant, stop their screen share, remove them, end the meeting for everyone |
+| Recording | Saved on the host's PC only (meeting tab + everyone's audio, webm). While recording, everyone sees a "● Recording" badge |
+| Layout | Tiles fit the window automatically (no scrolling); a shared screen is shown large; works on phones |
+| Privacy | No server-side recording or chat storage; meeting data is deleted automatically after a set time (24 hours by default) |
 
-![참석자 화면 — 3인 타일 배치](docs/screenshot-grid.jpg)
+![Participant view — three-person tile layout](docs/screenshot-grid.jpg)
 
-## 빠른 시작
+## Quick start
 
-Docker(Docker Desktop 또는 Docker Engine + Compose v2)와 최신 크롬·엣지가 필요합니다. macOS·Linux에서는 `openssl`도 필요합니다.
-
-1. 저장소를 받습니다.
-2. 실행 스크립트를 돌립니다. 처음 실행하면 `.env`가 만들어지고 키·시크릿·호스트 코드가 난수로 채워지며, 호스트 코드가 화면에 출력됩니다.
-3. 브라우저에서 `http://localhost:3000`을 열고 호스트 코드로 회의를 만듭니다.
-4. 표시된 초대 링크를 다른 탭에서 열고 회의 비밀번호로 입장을 요청한 뒤, 호스트 탭에서 승인합니다(대기실은 기본으로 켜져 있습니다).
+You need Docker (Docker Desktop, or Docker Engine + Compose v2) and a recent Chrome or Edge. On macOS and Linux you also need `openssl`.
 
 ```bash
 git clone https://github.com/jason-log/meetflow-oss.git && cd meetflow-oss && ./start.sh
 ```
 
-Windows에서는 `start.bat`을 실행합니다. 상태 확인은 `docker compose ps`, `curl http://localhost:3000/api/health`입니다.
+On Windows, run `start.bat` instead.
 
-## 구성
+1. On first run the script creates `.env`, fills the keys, secret and host code with random values, and prints the **host code**.
+2. Open `http://localhost:3000`, enter a meeting title, your name, the host code and a meeting password you choose (6–64 characters), then click **회의 만들기** (Create meeting).
+3. Open the invite link in another tab, enter a name and the meeting password, and click **입장하기** (Join). Back in the host tab, click **수락** (Admit) — the lobby is on by default.
+
+The UI is in Korean for now; your browser's built-in page translation works well enough to find your way around.
+
+Check status with `docker compose ps` or `curl http://localhost:3000/api/health`.
+
+## How it works
 
 ```
-브라우저 ──HTTPS/WSS──▶ Caddy ──▶ backend (회의·비밀번호·토큰·호스트 제어, 웹앱 제공)
-   │                      └──/rtc──▶ LiveKit (시그널링)
-   └──────── UDP 7882 / TCP 7881 (미디어) ────────▶ LiveKit SFU
-                                       backend ──▶ Valkey (회의 정보, TTL)
+Browser ──HTTPS/WSS──▶ Caddy ──▶ backend (meetings, passwords, tokens, host controls, serves the web app)
+   │                      └──/rtc──▶ LiveKit (signaling)
+   └──────── UDP 7882 / TCP 7881 (media) ────────▶ LiveKit SFU
+                                       backend ──▶ Valkey (meeting data, TTL)
 ```
 
-그림은 IP 서버 배포 기준입니다. 도메인 배포는 LiveKit을 별도 도메인(`LIVEKIT_DOMAIN`)으로 받고, 로컬 실행은 Caddy 없이 브라우저가 3000·7880에 바로 접속합니다.
+The diagram shows the IP-only server deployment. With a domain, LiveKit gets its own hostname (`LIVEKIT_DOMAIN`); when running locally there is no Caddy and the browser talks to ports 3000 and 7880 directly.
 
-- **SFU**(Selective Forwarding Unit): 각 참석자가 영상을 서버에 한 번만 올리고 서버가 나머지에게 나눠 주는 방식입니다. 참석자 수가 늘어도 각자의 업로드 대역폭이 거의 늘지 않습니다.
-- **TURN**: UDP나 비표준 포트가 막힌 망의 참석자를 위해 미디어를 서버가 대신 중계하는 방식입니다. 선택 기능입니다([배포](#turntls-443-확장-선택)).
-- **ICE**: 브라우저와 서버가 쓸 수 있는 연결 경로(UDP·TCP·중계)를 시험해 되는 것을 고르는 절차입니다.
+- **SFU** (Selective Forwarding Unit): each participant uploads their video once and the server forwards it to everyone else, so upload bandwidth per person barely grows as the meeting gets bigger.
+- **TURN**: the server relays media for participants on networks that block UDP or non-standard ports. Optional — see [Deployment](#turntls-on-443-optional).
+- **ICE**: the procedure by which the browser and server try the available paths (UDP, TCP, relay) and pick one that works.
 
-| 서비스 | 역할 | 외부 공개 포트 |
+| Service | Role | Publicly exposed ports |
 |---|---|---|
-| livekit (v1.13.8) | WebRTC SFU 미디어 서버 | 7881/tcp(ICE/TCP), 7882/udp(미디어) |
-| redis (Valkey 8.1) | 회의 정보(TTL) 저장 | 없음 |
-| backend (Node 22, Express) | 회의 생성·비밀번호 검증·토큰 발급·호스트 제어, 웹앱 제공 | 없음(127.0.0.1:3000) |
-| caddy (prod 프로필) | HTTPS/WSS 인증서 자동 발급·프록시 | 80/tcp, 443/tcp, 443/udp |
+| livekit (v1.13.8) | WebRTC SFU media server | 7881/tcp (ICE/TCP), 7882/udp (media) |
+| redis (Valkey 8.1) | Stores meeting data with a TTL | none |
+| backend (Node 22, Express) | Creates meetings, verifies passwords, issues tokens, host controls, serves the web app | none (127.0.0.1:3000) |
+| caddy (`prod` profile) | Automatic HTTPS/WSS certificates and reverse proxy | 80/tcp, 443/tcp, 443/udp |
 
-프런트는 빌드 단계가 없는 정적 파일 3개(`backend/public/`)입니다. 외부 CDN 없이 스크립트·스타일은 자기 서버(`'self'`)에서만 받고, 접속 허용 대상은 자기 서버와 LiveKit 주소뿐입니다(CSP).
+The frontend is three static files in `backend/public/` with no build step. Scripts and styles load only from your own server (`'self'`), and the page may connect only to your server and your LiveKit address (CSP).
 
-## 환경 변수
+## Configuration
 
-`.env.example`을 `.env`로 복사해 씁니다(실행 스크립트가 자동으로 합니다). `.env`는 git·메일·메신저로 공유하지 않습니다.
+Copy `.env.example` to `.env` (the start script does this for you). Never share `.env` through git, email or chat.
 
-| 변수 | 기본값 | 설명 |
+| Variable | Default | Description |
 |---|---|---|
-| `MEETFLOW_ENV` | `development` | 운영은 `production` — 약한 키 거부·wss 강제·HSTS 등 운영 안전 점검이 켜집니다 |
-| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | 자동 생성 | LiveKit 키(8자 이상)·시크릿(32자 이상) |
-| `HOST_ACCESS_CODE` | 자동 생성 | 회의를 만들 수 있는 내부 담당자용 코드(8자 이상). 외부 참석자에게 주지 않습니다 |
-| `LIVEKIT_PUBLIC_URL` | `ws://localhost:7880` | 브라우저가 접속할 LiveKit 주소. 운영은 `wss://…` |
-| `LIVEKIT_NODE_IP` | `127.0.0.1` | LiveKit이 참석자에게 알려 줄 미디어 IP. 운영은 서버 공인 IP |
-| `TRUST_PROXY` | `0` | 리버스 프록시(Caddy) 뒤에서는 `1` — 실제 접속자 IP로 속도 제한을 겁니다 |
-| `MAX_PARTICIPANTS` | `20` | 회의당 정원(2~50) |
-| `ROOM_TTL_HOURS` | `24` | 회의 정보 보관 시간(1~336) |
-| `APP_DOMAIN` / `LIVEKIT_DOMAIN` | `meet.example.com` / `livekit.example.com` | 도메인 배포 시 웹·LiveKit 도메인(필수) |
-| `TURN_DOMAIN` / `TURN_CERT_DIR` | `turn.example.com` / Let's Encrypt 경로 | TURN/TLS 확장을 쓸 때만 |
+| `MEETFLOW_ENV` | `development` | Use `production` on a server — turns on safety checks (rejects weak keys, requires `wss://`, sends HSTS) |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | generated | LiveKit key (8+ characters) and secret (32+ characters) |
+| `HOST_ACCESS_CODE` | generated | Code your own staff use to create meetings (8+ characters). Do not give it to guests |
+| `LIVEKIT_PUBLIC_URL` | `ws://localhost:7880` | LiveKit address the browser connects to. `wss://…` in production |
+| `LIVEKIT_NODE_IP` | `127.0.0.1` | Media IP that LiveKit advertises to participants. The server's public IP in production |
+| `TRUST_PROXY` | `0` | Set to `1` behind a reverse proxy (Caddy) so rate limits apply to each visitor's real IP |
+| `MAX_PARTICIPANTS` | `20` | Participants per meeting (2–50) |
+| `ROOM_TTL_HOURS` | `24` | How long meeting data is kept (1–336) |
+| `APP_DOMAIN` / `LIVEKIT_DOMAIN` | `meet.example.com` / `livekit.example.com` | Web and LiveKit hostnames for a domain deployment (required there) |
+| `TURN_DOMAIN` / `TURN_CERT_DIR` | `turn.example.com` / Let's Encrypt path | Only for the TURN/TLS extension |
 
-위 표는 로컬·도메인 배포(`docker-compose.yml`) 기준입니다. IP 서버 배포(`docker-compose.server.yml`)는 `scripts/init-server-env.sh`가 `PUBLIC_IP`·`TLS_MODE`·키를 담은 `.env`를 따로 만들고, 운영 모드·wss·`TRUST_PROXY=1`은 Compose 파일에 고정돼 있습니다.
+This table applies to local and domain deployments (`docker-compose.yml`). For the IP-only server deployment (`docker-compose.server.yml`), `scripts/init-server-env.sh` writes a separate `.env` with `PUBLIC_IP`, `TLS_MODE` and the keys; production mode, `wss://` and `TRUST_PROXY=1` are fixed in that Compose file.
 
-## 배포
+## Deployment
 
-### 공인 IP만 있는 서버 (도메인 없음)
+### Server with a public IP only (no domain)
 
-웹·API·LiveKit 시그널링이 443 하나를 경로(`/rtc`)로 나눠 씁니다. 설정은 `docker-compose.server.yml` + `Caddyfile.server`로 끝납니다. 아래 `203.0.113.10`은 문서용 예시 IP이므로 실제 공인 IP로 바꿉니다.
+The web app, API and LiveKit signaling share port 443, split by path (`/rtc`). Everything is in `docker-compose.server.yml` + `Caddyfile.server`. `203.0.113.10` below is a documentation example — replace it with your server's public IP.
 
 ```bash
-# 최초 1회
+# first time
 cd ~ && git clone https://github.com/jason-log/meetflow-oss.git && cd meetflow-oss && bash scripts/init-server-env.sh 203.0.113.10 internal
-# 배포·갱신
+# deploy / update
 cd ~/meetflow-oss && git pull origin main && docker compose -f docker-compose.server.yml up -d --build && docker compose -f docker-compose.server.yml ps
 ```
 
-- `TLS_MODE=internal`: Caddy 자체 인증서입니다. 접속할 때 경고가 한 번 뜨며, 내부망 시험용입니다.
-- `TLS_MODE=public`: Let's Encrypt IP 인증서(6일 수명, 자동 갱신)입니다. 443/tcp가 인터넷에 열려 있어야 발급·갱신됩니다. 바꾼 뒤 `docker compose -f docker-compose.server.yml up -d caddy`를 실행합니다.
-- 공개 포트는 443/tcp, 7881/tcp, 7882/udp, 3478/udp이며 모두 `PUBLIC_IP`에만 묶입니다. 80/tcp는 쓰지 않아 같은 서버의 다른 웹 서비스와 겹치지 않습니다.
-- Docker가 연 포트는 호스트 방화벽(UFW 등)을 거치지 않을 수 있습니다. 노출 통제는 경계 방화벽이나 `DOCKER-USER` 체인으로 합니다.
-- IP만으로는 TURN/TLS 443을 쓸 수 없습니다. 웹(443)만 허용하는 망의 참석자가 있다면 도메인을 마련해 아래 방식으로 바꿉니다.
+- `TLS_MODE=internal`: Caddy's self-signed certificate. Browsers show a warning once; meant for testing on an internal network.
+- `TLS_MODE=public`: Let's Encrypt IP certificate (6-day lifetime, renewed automatically). Port 443/tcp must be reachable from the internet for issuance and renewal. After switching, run `docker compose -f docker-compose.server.yml up -d caddy`.
+- Public ports are 443/tcp, 7881/tcp, 7882/udp and 3478/udp, all bound to `PUBLIC_IP` only. Port 80/tcp is not used, so it does not clash with other web services on the same server.
+- Ports opened by Docker may bypass the host firewall (UFW etc.). Control exposure with your perimeter firewall or the `DOCKER-USER` chain.
+- TURN/TLS on 443 is not possible with an IP address alone. If some participants are on networks that allow only web traffic (443), get a domain and use the setup below.
 
-### 도메인이 있는 서버
+### Server with a domain
 
-`.env`에서 `MEETFLOW_ENV=production`, `TRUST_PROXY=1`, `LIVEKIT_PUBLIC_URL=wss://livekit.<도메인>`, `LIVEKIT_NODE_IP=<공인 IP>`, `APP_DOMAIN`, `LIVEKIT_DOMAIN`을 채운 뒤 실행합니다.
+In `.env`, set `MEETFLOW_ENV=production`, `TRUST_PROXY=1`, `LIVEKIT_PUBLIC_URL=wss://livekit.<your-domain>`, `LIVEKIT_NODE_IP=<public IP>`, `APP_DOMAIN` and `LIVEKIT_DOMAIN`, then run:
 
 ```bash
 docker compose --profile prod up -d --build
 ```
 
 > [!WARNING]
-> `MEETFLOW_ENV=production`이 빠지면 운영 안전 점검이 꺼집니다. 이때 `TRUST_PROXY=1`도 빠지면 모든 접속이 프록시 IP 하나로 보여 속도 제한이 회의 전체를 막으며, 백엔드는 이를 감지하면 로그에 경고를 한 번 남깁니다. `MEETFLOW_ENV=production`에서 `TRUST_PROXY=0`이면 백엔드가 시작하지 않습니다.
+> Without `MEETFLOW_ENV=production` the production safety checks are off. If `TRUST_PROXY=1` is also missing, every visitor appears to come from the proxy's single IP and the rate limit can block the whole meeting; the backend logs a one-time warning when it detects this. With `MEETFLOW_ENV=production` and `TRUST_PROXY=0`, the backend refuses to start.
 
-### TURN/TLS 443 확장 (선택)
+### TURN/TLS on 443 (optional)
 
-UDP와 7881/tcp가 막힌 망의 참석자를 위해 미디어를 443/tcp TLS로 중계합니다. 공인 443은 `edge`(nginx stream)가 받아 SNI로 `turn.<도메인>`은 LiveKit 내장 TURN으로, 나머지는 Caddy로 나눕니다(PROXY protocol로 실제 IP 전달). `.env`에 `TURN_DOMAIN`을 넣고 DNS를 추가한 뒤 실행합니다. Docker Compose v2.24.4 이상이 필요합니다.
+Relays media over TLS on 443/tcp for participants whose networks block UDP and 7881/tcp. An `edge` container (nginx stream) takes public port 443 and routes by SNI: `turn.<your-domain>` goes to LiveKit's built-in TURN server, everything else goes to Caddy (the real client IP is passed with the PROXY protocol). Add `TURN_DOMAIN` to `.env`, create the DNS record, then run the command below. Requires Docker Compose v2.24.4 or later.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.turn.yml --profile prod up -d --build
 ```
 
-- 첫 기동 때 Caddy가 TURN 인증서를 받기 전까지 livekit이 재시작을 반복합니다(정상, 1~2분).
-- 인증서 갱신(약 60일 주기) 뒤에는 `docker compose restart livekit`이 필요합니다.
-- 접속 경로 점검: 회의 주소 뒤에 `?relay=1`(중계 강제) 또는 `?diag=1`을 붙이고 브라우저 콘솔에서 `await meetflowDiag()`를 실행합니다.
+- On first start, livekit restarts repeatedly until Caddy has obtained the TURN certificate (expected, 1–2 minutes).
+- After each certificate renewal (about every 60 days), run `docker compose restart livekit`.
+- To check which connection path is used, append `?relay=1` (force relay) or `?diag=1` to the meeting URL and run `await meetflowDiag()` in the browser console.
 
-## 보안 설계
+## Security design
 
-- **권한 3단계**: 회의 생성은 호스트 코드, 입장은 회의 비밀번호, 호스트 제어는 회의마다 새로 발급하는 호스트 키(32바이트 난수)로 나뉩니다. 서버는 비밀번호를 scrypt 해시로, 호스트 키는 SHA-256 해시로만 저장합니다.
-- **대입 방지**: 비밀번호 실패 10회/10분, 호스트 코드 실패 10회/15분 제한이 있습니다. IPv6는 /64 단위로 묶어 셉니다. 회의 코드는 약 9.5×10¹³가지입니다.
-- **토큰**: LiveKit 참가 토큰은 2분 수명이고 관리 권한(roomAdmin)이 없습니다. 참석자 역할은 서버가 서명해 넣으므로 참석자가 호스트를 흉내 낼 수 없습니다.
-- **웹**: 외부 스크립트·인라인 스크립트가 없습니다(CSP `script-src 'self'`, `frame-ancestors 'none'`, `no-referrer`). 화면 출력은 모두 `textContent`입니다. 이름의 제어문자·양방향 조작 문자는 서버에서 지웁니다.
-- **운영 점검**: 운영 모드에서는 공개된 기본값·시험값 키, `ws://` 주소, `TRUST_PROXY=0`이면 백엔드가 시작하지 않습니다.
+- **Three levels of access**: creating a meeting needs the host code, joining needs the meeting password, and host controls need a per-meeting host key (32 random bytes). The server stores the password only as an scrypt hash and the host key only as a SHA-256 hash.
+- **Brute-force protection**: 10 failed passwords per 10 minutes (per IP, per meeting) and 10 failed host codes per 15 minutes. IPv6 addresses are counted per /64. Meeting codes have about 9.5×10¹³ possible values.
+- **Tokens**: LiveKit join tokens live for 2 minutes and carry no admin rights (`roomAdmin`). The participant's role is signed by the server, so a participant cannot pose as the host.
+- **Web**: no external or inline scripts (CSP `script-src 'self'`, `frame-ancestors 'none'`, `no-referrer`). All on-screen text is set with `textContent`. Control characters and bidirectional-override characters are stripped from names on the server.
+- **Production checks**: in production mode the backend refuses to start with publicly known default or test keys, a `ws://` address, or `TRUST_PROXY=0`.
 
-취약점은 공개 Issue에 쓰지 말고 [SECURITY.md](SECURITY.md)의 방법으로 알려 주십시오.
+Please do not report vulnerabilities in public issues — follow [SECURITY.md](SECURITY.md).
 
-## 한계
+## Limitations
 
-- **내보낸 참석자의 재접속**: 접속 중에는 LiveKit 서버가 갱신 토큰을 내려줍니다. 그래서 개조한 클라이언트로 그 토큰을 써 다시 들어오는 것까지는 막지 못합니다. 확실히 막으려면 내보낸 뒤 회의를 잠그거나 비밀번호를 바꿉니다.
-- **호스트 제어는 강제가 아닙니다**: 음소거·화면 공유 중지 뒤 참석자가 다시 켤 수 있고, 모든 참석자가 화면을 공유할 수 있습니다.
-- **녹화 표시**: 「● 녹화 중」은 호스트 브라우저가 5초마다 알리는 방식이며 서버가 보증하지 않습니다. 녹화 동의 문구와 보관 기간은 운영 기관이 정합니다.
-- **단일 인스턴스 전제**: 속도 제한 기록은 백엔드 메모리에 있어 재시작하면 초기화되고, 백엔드를 여러 대로 늘리면 공유되지 않습니다.
-- **브라우저**: 최신 크롬·엣지 기준으로 시험했습니다. 자체 인증서(`TLS_MODE=internal`)에서는 휴대폰 접속이 실패할 수 있어, 외부 참석자를 부를 때는 정식 인증서(`TLS_MODE=public` 또는 도메인)를 씁니다.
+- **Removed participants can come back with a modified client**: while connected, the LiveKit server hands out refresh tokens, and a modified client could reuse one to rejoin. To be sure, lock the meeting or change the password after removing someone.
+- **Host controls are not enforced**: after being muted or having a screen share stopped, a participant can turn it back on. Every participant can share their screen.
+- **Recording badge**: "● Recording" is announced by the host's browser every 5 seconds; the server does not guarantee it. The operator is responsible for consent wording and retention periods.
+- **Single instance**: rate-limit counters live in backend memory, so they reset on restart and are not shared if you run several backends.
+- **Browsers**: tested on recent Chrome and Edge. With the self-signed certificate (`TLS_MODE=internal`) phones may fail to connect — use a real certificate (`TLS_MODE=public` or a domain) when inviting outside guests.
+- **UI language**: the interface is Korean only for now.
 
-## 개발·시험
+## Development and tests
 
 ```bash
 cd backend && npm install && npm test
 ```
 
-Redis는 ioredis-mock, LiveKit은 스텁으로 대체한 API 단위 시험 24건입니다(Node 22, Docker·LiveKit 불필요).
+24 API unit tests, with Redis replaced by ioredis-mock and LiveKit by a stub (Node 22; no Docker or LiveKit needed).
 
-## 기여
+## Contributing
 
-질문·버그 제보는 [Issues](https://github.com/jason-log/meetflow-oss/issues)에 남겨 주십시오. 개인이 운영하는 PoC라 답이 늦을 수 있습니다. 코드 변경(PR)은 먼저 Issue로 방향을 맞춘 뒤 보내 주시면 검토합니다.
+Questions and bug reports are welcome in [Issues](https://github.com/jason-log/meetflow-oss/issues). This is a PoC maintained by one person, so replies may be slow. For code changes, please open an issue first to agree on the direction, then send a pull request.
 
-## 라이선스
+Background article (in Korean): [MeetFlow — self-hosted video meetings you join with a link and a password](https://jason-log.notion.site/MeetFlow-400b37d1f4498168b1cfca0913f40dae)
+
+## Credits
+
+MeetFlow was designed, built, tested and documented together with [Claude](https://www.anthropic.com/claude) (Anthropic) as an AI pair programmer — from the code and security review to this README. From this English release on, commits made with Claude carry a `Co-authored-by: Claude <noreply@anthropic.com>` trailer.
+
+## License
 
 [Apache-2.0](LICENSE) © 2026 The MeetFlow Authors
 
-사용한 구성요소: LiveKit Server·livekit-client(Apache-2.0), Valkey(BSD-3-Clause), Caddy(Apache-2.0), nginx(BSD-2-Clause).
+Built on: LiveKit Server and livekit-client (Apache-2.0), Valkey (BSD-3-Clause), Caddy (Apache-2.0), nginx (BSD-2-Clause).

@@ -1,8 +1,8 @@
-﻿# MeetFlow v0.2 — .env 최초 생성 (Windows PowerShell 5.1 호환)
+﻿# MeetFlow v0.2 — create .env on first run (Windows PowerShell 5.1 compatible)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $envPath = Join-Path $root '.env'
-if (Test-Path $envPath) { Write-Host '[MeetFlow] .env 가 이미 있습니다. 그대로 사용합니다.'; exit 0 }
+if (Test-Path $envPath) { Write-Host '[MeetFlow] .env already exists. Using it as is.'; exit 0 }
 
 function New-Hex([int]$bytes) {
   $b = New-Object byte[] $bytes
@@ -20,6 +20,6 @@ $out = foreach ($l in $lines) {
   elseif ($l -like 'HOST_ACCESS_CODE=__GENERATE__*') { "HOST_ACCESS_CODE=$hostCode" }
   else { $l }
 }
-# BOM 없는 UTF-8 (docker compose 가 BOM 을 변수명으로 읽지 않도록)
+# UTF-8 without BOM (so docker compose does not read the BOM as part of a variable name)
 [System.IO.File]::WriteAllLines($envPath, $out, (New-Object System.Text.UTF8Encoding $false))
-Write-Host "[MeetFlow] .env 생성 완료. 호스트 코드: $hostCode  (회의 만들기 화면에서 사용)"
+Write-Host "[MeetFlow] .env created. Host code: $hostCode  (enter it on the create-meeting screen)"

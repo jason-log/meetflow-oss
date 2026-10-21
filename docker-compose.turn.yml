@@ -1,9 +1,9 @@
-# TURN/TLS 443 확장 (선택) — UDP·비표준 포트를 막는 기관망 참가자용 중계
-# 사용: docker compose -f docker-compose.yml -f docker-compose.turn.yml --profile prod up -d --build
-# 구조: 공인 443/tcp 는 edge(nginx stream)가 받아 TLS SNI로 분기한다.
-#   turn.<도메인>  → livekit 내장 TURN(TLS 443, 인증서는 Caddy가 발급한 것을 읽기 전용으로 공유)
-#   그 밖(meet·livekit) → caddy:443 (PROXY protocol 로 실제 접속자 IP 전달)
-# 요구: Docker Compose v2.24.4 이상(!override), DNS A 레코드 turn.<도메인> 추가, 방화벽 3478/udp(선택).
+# TURN/TLS on 443 (optional) — relay for participants on networks that block UDP / non-standard ports
+# usage: docker compose -f docker-compose.yml -f docker-compose.turn.yml --profile prod up -d --build
+# layout: edge (nginx stream) takes public 443/tcp and routes by TLS SNI.
+#   turn.<domain>  → livekit built-in TURN (TLS 443, reusing Caddy's certificate read-only)
+#   everything else (meet, livekit) → caddy:443 (real client IP passed via PROXY protocol)
+# requires: Docker Compose v2.24.4+ (!override), a DNS A record for turn.<domain>, firewall 3478/udp (optional).
 services:
   edge:
     image: nginx:1.27-alpine
@@ -12,7 +12,7 @@ services:
     ports:
       - "443:443/tcp"
     environment:
-      TURN_DOMAIN: "${TURN_DOMAIN:?TURN_DOMAIN 미설정}"
+      TURN_DOMAIN: "${TURN_DOMAIN:?TURN_DOMAIN not set}"
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
       NGINX_ENVSUBST_FILTER: TURN_DOMAIN
     volumes:
@@ -22,9 +22,9 @@ services:
 
   caddy:
     ports: !override
-      - "80:80"            # 443 은 edge 가 받는다(HTTP/3 443/udp 는 이 구성에서 쓰지 않음)
+      - "80:80"            # 443 is taken by edge (HTTP/3 on 443/udp is not used in this setup)
     environment:
-      TURN_DOMAIN: "${TURN_DOMAIN:?TURN_DOMAIN 미설정}"
+      TURN_DOMAIN: "${TURN_DOMAIN:?TURN_DOMAIN not set}"
     volumes: !override
       - ./Caddyfile.turn:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -34,13 +34,13 @@ services:
     environment:
       LIVEKIT_TURN_ENABLED: "true"
       LIVEKIT_TURN_DOMAIN: "${TURN_DOMAIN}"
-      LIVEKIT_TURN_TLS_PORT: "443"          # 클라이언트에 광고되는 포트 = edge 공인 443
+      LIVEKIT_TURN_TLS_PORT: "443"          # port advertised to clients = edge public 443
       LIVEKIT_TURN_UDP_PORT: "3478"
-      LIVEKIT_TURN_PROXY_PROTOCOL: "true"   # edge 가 PROXY protocol 을 붙여 보낸다
+      LIVEKIT_TURN_PROXY_PROTOCOL: "true"   # edge adds the PROXY protocol header
       LIVEKIT_TURN_CERT_FILE: "${TURN_CERT_DIR:-/caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory}/${TURN_DOMAIN}/${TURN_DOMAIN}.crt"
       LIVEKIT_TURN_KEY_FILE: "${TURN_CERT_DIR:-/caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory}/${TURN_DOMAIN}/${TURN_DOMAIN}.key"
     ports:
-      - "3478:3478/udp"                     # TURN/UDP (UDP 3478 만 열린 망용, 선택)
+      - "3478:3478/udp"                     # TURN/UDP (for networks where only UDP 3478 is open, optional)
     volumes: !override
       - ./livekit.turn.yaml:/etc/livekit.yaml:ro
       - caddy-data:/caddy-data:ro

@@ -1,4 +1,4 @@
-# TURN 확장 구성용 Caddyfile — edge(nginx) 뒤에서 443 을 받는다.
+# Caddyfile for the TURN extension — receives 443 from behind edge (nginx).
 {
 	servers :443 {
 		listener_wrappers {
@@ -20,7 +20,7 @@
 	reverse_proxy livekit:7880
 }
 
-# TURN 도메인: 인증서 발급·갱신용(실제 TURN 트래픽은 edge 가 livekit 으로 보낸다)
+# TURN hostname: only for issuing/renewing its certificate (actual TURN traffic goes from edge to livekit)
 {$TURN_DOMAIN} {
 	respond "MeetFlow TURN" 200
 }

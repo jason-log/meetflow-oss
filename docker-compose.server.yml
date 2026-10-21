@@ -1,17 +1,17 @@
-# MeetFlow 운영 서버용 Compose — 공인 IP 하나, 도메인 없는 서버(다른 서비스와 포트 분리)
-# 사용: docker compose -f docker-compose.server.yml up -d --build   (.env 는 scripts/init-server-env.sh 로 생성)
+# MeetFlow Compose file for a server with one public IP and no domain (ports kept separate from other services)
+# usage: docker compose -f docker-compose.server.yml up -d --build   (create .env with scripts/init-server-env.sh)
 #
-# 도메인 없이 IP 주소로 HTTPS 를 쓴다.
-#   TLS_MODE=internal : Caddy 자체 인증서(브라우저 경고 1회 수락) — 내부망 시험용
-#   TLS_MODE=public   : Let's Encrypt IP 인증서(6일 수명, 자동 갱신) — 외부 참석자 초대용.
-#                       발급·갱신 검증이 인터넷 → PUBLIC_IP:443 으로 들어오므로 443/tcp 외부 개방이 전제다.
-# 포트(모두 PUBLIC_IP 에만 바인딩, 80/tcp 미사용):
-#   443/tcp  웹·API·LiveKit 시그널링(/rtc 경로)   7881/tcp ICE/TCP   7882/udp 미디어   3478/udp TURN/UDP
+# HTTPS on the IP address, no domain needed.
+#   TLS_MODE=internal : Caddy self-signed certificate (accept the browser warning once) — for internal testing
+#   TLS_MODE=public   : Let's Encrypt IP certificate (6-day lifetime, auto-renewed) — for inviting outside guests.
+#                       Issuance/renewal checks arrive from the internet at PUBLIC_IP:443, so 443/tcp must be open to the internet.
+# ports (all bound to PUBLIC_IP only, 80/tcp unused):
+#   443/tcp  web, API, LiveKit signaling (/rtc path)   7881/tcp ICE/TCP   7882/udp media   3478/udp TURN/UDP
 name: meetflow
 
 services:
   redis:
-    # Valkey(BSD-3, Redis 호환) — Redis 7.4+ 는 RSAL/SSPL(비 OSI) 라이선스라 교체(2026-10-20)
+    # Valkey (BSD-3, Redis-compatible) — used instead of Redis 7.4+, which is RSAL/SSPL (not OSI-approved)
     image: valkey/valkey:8.1.10-alpine
     restart: always
     command: ["valkey-server", "--appendonly", "yes"]
@@ -29,9 +29,9 @@ services:
     restart: always
     command: ["--config", "/etc/livekit.yaml"]
     environment:
-      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?.env 없음 - scripts/init-server-env.sh 실행}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET 미설정}"
-      NODE_IP: "${PUBLIC_IP:?PUBLIC_IP 미설정}"
-      # TURN/UDP 만 켠다(TLS 는 도메인이 있어야 가능 — IP 만으로는 443 공유 불가)
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?.env missing - run scripts/init-server-env.sh}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET not set}"
+      NODE_IP: "${PUBLIC_IP:?PUBLIC_IP not set}"
+      # TURN/UDP only (TLS needs a domain — 443 cannot be shared with an IP alone)
       LIVEKIT_TURN_ENABLED: "true"
       LIVEKIT_TURN_UDP_PORT: "3478"
     ports:
@@ -57,7 +57,7 @@ services:
       LIVEKIT_PUBLIC_URL: "wss://${PUBLIC_IP}"
       LIVEKIT_INTERNAL_URL: "http://livekit:7880"
       REDIS_URL: "redis://redis:6379"
-      HOST_ACCESS_CODE: "${HOST_ACCESS_CODE:?HOST_ACCESS_CODE 미설정}"
+      HOST_ACCESS_CODE: "${HOST_ACCESS_CODE:?HOST_ACCESS_CODE not set}"
       MAX_PARTICIPANTS: "${MAX_PARTICIPANTS:-20}"
       ROOM_TTL_HOURS: "${ROOM_TTL_HOURS:-24}"
       TRUST_PROXY: "1"
